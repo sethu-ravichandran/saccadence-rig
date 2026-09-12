@@ -7,7 +7,7 @@ import { Renderer } from './renderer.js';
 import { TrialController } from './trialController.js';
 import { WsClient } from './wsClient.js';
 import { attachControlSurface } from './controlSurface.js';
-import { attachStartScreen, setPaired, setMarkerReady } from './startScreen.js';
+import { attachStartScreen, setPaired } from './startScreen.js';
 import { RigState } from './rigState.js';
 import { estimatedDurationMs } from './protocolTiming.js';
 
@@ -21,6 +21,14 @@ const markerEncoder = new MarkerEncoder(config.marker);
 // same session without operator action.
 let sessionCode = null;
 
+// Set once the phone's camera has locked the guard marker and the clinician
+// has tapped "Start test" there (phone_ready). Space can't end the setup
+// gate — and so can't move the rig into a trial — until this is true, per
+// the "don't enter until the marker is detected and Start test is tapped"
+// requirement. Reset on every fresh setup-calibration entry so a rig
+// restart/reconnect can't carry a stale confirmation into a new session.
+let markerConfirmedByPhone = false;
+
 const ws = new WsClient({
   onOpen: () => {
     if (sessionCode) ws.send({ type: 'register_rig', sessionCode });
@@ -33,8 +41,8 @@ const ws = new WsClient({
     else if (type === 'peer_count') setPaired(msg.count);
     else if (type === 'join_ack' && !msg.ok) console.log('[ws] join rejected:', msg.reason);
     else if (type === 'phone_ready') {
-      console.log('[phone] marker locked, ready ✓ — Enter is now unlocked.');
-      setMarkerReady(true);
+      console.log('[phone] marker locked, ready ✓ — Space will now end calibration.');
+      markerConfirmedByPhone = true;
     }
   },
 });
@@ -60,12 +68,22 @@ const trial = new TrialController({
 });
 
 const hudTimeEl = document.getElementById('hud-time');
+const calibGateEl = document.getElementById('calib-gate-status');
 
 function updateHud() {
   if (!hudTimeEl) return;
   if (trial.state === RigState.SETUP_CALIBRATION) {
-    hudTimeEl.textContent = 'Confirm marker lock, then press Space to end calibration.';
-  } else if (trial.state === RigState.READY || trial.state === RigState.COMPLETED) {
+    hudTimeEl.textContent = '';
+    if (calibGateEl) {
+      calibGateEl.textContent = markerConfirmedByPhone
+        ? 'Marker confirmed by phone ✓ — press Space to end calibration.'
+        : 'Waiting for the phone to confirm marker lock…';
+      calibGateEl.style.color = markerConfirmedByPhone ? '#4ade80' : '#f5a623';
+    }
+    return;
+  }
+  if (calibGateEl) calibGateEl.textContent = '';
+  if (trial.state === RigState.READY || trial.state === RigState.COMPLETED) {
     trialStartMs = null;
     const protocol = config.protocols[config.protocolId];
     const estSec = Math.round(estimatedDurationMs(protocol, config.calibrationMs) / 1000);
@@ -86,8 +104,15 @@ resize();
 attachControlSurface({
   onStart: () => {
     // First Space after the setup gate ends it; every Space after that starts a trial.
-    if (trial.state === RigState.SETUP_CALIBRATION) trial.endSetupCalibration();
-    else ws.send(trial.start('local-test'));
+    if (trial.state === RigState.SETUP_CALIBRATION) {
+      if (!markerConfirmedByPhone) {
+        console.log('[calibration] Space ignored — waiting for the phone to confirm marker lock and tap Start test.');
+        return;
+      }
+      trial.endSetupCalibration();
+    } else {
+      ws.send(trial.start('local-test'));
+    }
   },
   onRepeat: () => ws.send(trial.start('repeat')),
   onStop: () => {
@@ -118,6 +143,7 @@ attachStartScreen({
   },
   onEnter: (settings) => {
     console.log('[session]', settings);
+    markerConfirmedByPhone = false;
     trial.beginSetupCalibration();
   },
 });

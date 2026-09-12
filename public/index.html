@@ -11,12 +11,7 @@
   #start-screen {
     position: fixed; inset: 0; z-index: 10;
     display: flex; align-items: center; justify-content: center;
-    /* Transparent, not opaque: the guard marker renders in the canvas's
-       bottom-right corner from the very first frame (see trialController.js
-       — SETUP_CALIBRATION is the constructor's default state), and the phone
-       needs to see it to confirm lock *before* Enter is clickable. An opaque
-       background here would hide it behind this login panel the whole time. */
-    background: transparent; color: #e8e8e8;
+    background: #0b0b0d; color: #e8e8e8;
     font-family: -apple-system, BlinkMacSystemFont, sans-serif;
   }
   #start-screen .panel {
@@ -35,11 +30,7 @@
     width: 100%; margin-top: 22px; padding: 10px; border: none; border-radius: 6px;
     background: #3a7bfd; color: #fff; font-size: 14px; cursor: pointer;
   }
-  #start-screen button:disabled {
-    background: #2a2f3a; color: #777; cursor: not-allowed;
-  }
   #start-error { color: #ff6b6b; font-size: 12px; min-height: 16px; margin-top: 8px; }
-  #marker-status { font-size: 12px; color: #888; margin-top: 8px; }
   #session-code-row {
     margin-top: 18px; padding-top: 14px; border-top: 1px solid #2a2a30;
     font-size: 12px; color: #888;
@@ -58,6 +49,7 @@
   }
   #hud .key { color: #7fb2ff; font-weight: 600; }
   #hud #hud-time { margin-top: 6px; color: #4ade80; font-weight: 600; }
+  #hud #calib-gate-status { margin-top: 6px; font-weight: 600; }
 </style>
 </head>
 <body>
@@ -91,8 +83,7 @@
       </select>
 
       <div id="start-error"></div>
-      <button type="submit" id="enter-button" disabled>Enter</button>
-      <div id="marker-status">Point the phone's camera at the marker (bottom-right) to unlock Enter.</div>
+      <button type="submit">Enter</button>
 
       <div id="session-code-row">
         Pair mobile — session code: <span id="session-code">------</span>
@@ -109,6 +100,7 @@
   <div><span class="key">1</span> — full protocol (saccade + pursuit)</div>
   <div><span class="key">2</span> — saccade-only protocol</div>
   <div id="hud-time"></div>
+  <div id="calib-gate-status"></div>
 </div>
 <canvas id="stage"></canvas>
 <!-- Classic (non-module) script: puts qrcode() on window ahead of main.js. -->
