@@ -1,34 +1,46 @@
-# Eval Round 1 demo script — rig-side (draft for rehearsal, 4:00–4:30)
+# Eval Round demo script — rig-side (draft for rehearsal)
 
-Goal: show a credible clinic workflow to a calibrated, test-ready state. Do not claim
-the saccade algorithm is finished — it isn't, and that's fine.
+Goal: show the full mandatory-per-plan clinic workflow, driven through Office Kit,
+end to end on the rig side. This script covers only what the rig itself does; app-repo
+steps are marked "handed off."
 
 ## Flow + who narrates what
 
-1. **Rig login** (laptop, on screen) — clinician username + PIN gate.
-2. **Pair phone** — session code visible on the gate; phone connects, "Waiting for
-   phone…" flips to "Paired ✓" live, in front of the jury.
+1. **Rig login** (laptop, on screen) — clinician username + PIN gate, driven from
+   Office Kit's remote control.
+2. **Pair phone** — session code and pairing QR visible on the gate; phone scans/joins,
+   "Waiting for phone…" flips to "Paired ✓" live, in front of the jury. The relay only
+   forwards messages within a joined session — a wrong code is rejected.
 3. **Consent / intake** (phone, app repo) — handed off to whoever demos the Android app.
-4. **Calibration screen** (laptop) — marker visibly rendering (green/red guard + free-
-   running bit pattern), calibration_start emitted with a laptop timestamp.
-5. **Live laptop stimulus + marker** — Space ends calibration → Ready → Space again
-   starts a trial → dot steps through the saccade sequence, marker active (green guard),
-   target_step events going out with trialId/targetIndex/x/y/laptopTimeMs.
-6. **Front-camera recording UI** (phone, app repo) — handed off.
-7. **Deterministic sample result / result-template preview** (phone, app repo) —
-   handed off — a fixed/mock result screen, not a live-computed one.
+4. **Session-start calibration** (laptop) — marker visibly rendering (green/red guard +
+   free-running bit pattern) at session start; `calibration_start`/`calibration_stop`
+   (`role: 'setup'`) emitted with laptop timestamps. Space (via Office Kit) ends it → Ready.
+5. **Select protocol** — `1` on Office Kit selects the full saccade+pursuit protocol,
+   `2` selects saccade-only; selection is visible in the console and included in
+   every trial's `trial_config` event.
+6. **Live trial, driven entirely from Office Kit** — Space starts a trial:
+   - opening (`pre`) calibration bracket, marker active,
+   - fixation baseline,
+   - saccade step block — dot steps through the sequence at true visual angle,
+     `target_step` events carrying `trialId`/`targetIndex`/`stepAmplitudeDeg`/`x`/`y`/`laptopTimeMs`,
+   - pursuit sweep block (full protocol only) — constant-velocity passes,
+     `sweep_start`/`sweep_end` events carrying the commanded velocity and direction,
+   - closing (`post`) calibration bracket, marker active again, closing the trial's bracket.
+   `R` repeats a trial; `Esc` stops at any point in the bracket and returns to Ready.
+7. **Back-camera recording UI** (phone, app repo) — handed off.
+8. **Results screen** (phone, app repo) — handed off — reports latency, pursuit gain,
+   the itemised error budget (including measured drift across the bracket), and a
+   Gemma-drafted clinic note.
 
-## The line to say out loud, verbatim
+## What to say about Office Kit, unprompted
 
-> "The intake, local-data flow, rig stimulus, marker protocol, and capture UI are live.
-> We are currently validating calibration and landmark-derived onset detection."
-
-Say this right after step 5 or 6, before the result-preview screen — it's the pivot
-from "here's what's real" to "here's the placeholder," and it should land before a
-judge asks the question themselves.
+> Office Kit is driving this rig end to end — login, protocol selection, and the
+> full trial sequence are all Office Kit remote-control input. It's not decorative.
 
 ## What NOT to imply
 
-- The result screen is a template/sample, not a computed saccade-latency number.
-- Calibration currently gates trial-start (Space) but doesn't yet compute or apply any
-  spatial correction — it's a state transition + timestamp, not a completed calibration.
+- The rig only sequences and timestamps; offset/jitter/drift computation and every
+  measured value live entirely on the phone. Don't describe the rig itself as computing
+  a latency or gain number.
+- The pairing QR is a convenience for the six-character session code, not a security
+  mechanism — say "session code" if asked what secures pairing, not "encrypted."

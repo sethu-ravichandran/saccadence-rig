@@ -1,7 +1,8 @@
-// visualAngle — NOT on the critical path (Path-to-100 cuts visual-angle
-// calibration entirely; latency is a frame count). Kept as a harmless,
-// non-blocking bonus for the deck's roadmap slide. Nothing else in this
-// app depends on this being accurate.
+// visualAngle — AUTHORITATIVE geometry (re-promoted per the mandatory
+// implementation plan). Saccade step amplitude and pursuit sweep velocity
+// are both commanded in true visual degrees for the configured screen width
+// and viewing distance; pursuit gain is fitted against the commanded
+// deg/s, so this conversion is on the critical measurement path.
 
 export function degToPx(deg, canvasWidth, screenWidthMm, viewDistMm) {
   const pxPerMm = canvasWidth / screenWidthMm;

@@ -51,7 +51,19 @@ directly off the video, every frame, on its own clock. The WS channel is orchest
 (`start_trial` / `next_target` / `stop`) — it could be arbitrarily delayed and no measurement
 would be affected.
 
-## Wire messages (unchanged from earlier, minus the now-pointless `marker_state` echo)
+## Session control (relay-internal, never forwarded to the other peer)
+
+The relay (`server/wsRelay.js`) scopes every other message to clients paired into the
+same session, so "commands affect only the paired phone/rig session":
+
+```
+→ register_rig  { sessionCode }              // rig sends once per connect/reconnect
+→ join          { sessionCode }              // phone sends after scanning/typing the code
+← join_ack      { ok, reason? }              // reason present only when ok:false
+← peer_count    { count }                    // broadcast to a session on membership change
+```
+
+## Wire messages
 
 ```
 → start_trial   { subject_id }
@@ -59,19 +71,39 @@ would be affected.
 → stop          {}
 ```
 
-## Orchestration events the rig emits (added for calibration + target correlation)
+## Orchestration events the rig emits
 
 These are separate from the marker itself (still camera-only, per above) — they're
 timestamped WS broadcasts so Android can correlate its own clock/frames to laptop-side
 state changes. `laptopTimeMs` is `performance.now()` (monotonic, page-load-relative),
-not a wall-clock epoch — offset calculation against Android's clock is NOT solved yet,
-this just gets the raw numbers on the wire.
+not a wall-clock epoch — offset/jitter/drift math from these numbers is entirely the
+phone's responsibility; the rig only sequences and labels.
+
+Every trial carries its own calibration bracket — a `role: 'pre'` pair immediately
+before the trial's blocks and a `role: 'post'` pair immediately after, both tagged with
+the same `trialId` so the phone can pair them:
 
 ```
-← calibration_start  { laptopTimeMs }
-← calibration_stop   { laptopTimeMs }
-← target_step        { trialId, targetIndex, x, y, laptopTimeMs }
+← calibration_start  { role: 'setup' | 'pre' | 'post', trialId?, laptopTimeMs }
+← calibration_stop   { role: 'setup' | 'pre' | 'post', trialId?, laptopTimeMs }
 ```
 
-`target_step` fires once per dot placement during a running trial — index 0 is the
-initial center dot, indices 1..N follow `config.stepDegrees`.
+(`role: 'setup'` has no `trialId` — it's the one-time session-start marker check, not
+part of a trial's bracket.)
+
+```
+← trial_config   { trialId, protocolId, screenWidthMm, viewDistMm, stepDegrees, pursuit, laptopTimeMs }
+← block_start    { block: 'fixation' | 'saccade' | 'pursuit', trialId, laptopTimeMs }
+← block_end      { block: 'fixation' | 'saccade' | 'pursuit', trialId, laptopTimeMs }
+← target_step    { trialId, targetIndex, stepAmplitudeDeg, x, y, laptopTimeMs }
+← sweep_start    { trialId, passIndex, direction, amplitudeDeg, commandedVelocityDegPerSec, laptopTimeMs }
+← sweep_end      { trialId, passIndex, direction, laptopTimeMs }
+```
+
+`target_step` fires once per dot placement during the saccade block — index 0 is the
+initial center dot, indices 1..N follow the protocol's `stepDegrees`; `stepAmplitudeDeg`
+is `null` for index 0 and the commanded step angle otherwise. `sweep_start`/`sweep_end`
+bracket one constant-velocity pursuit pass; per-frame dot position during a sweep is
+never put on the wire — only the commanded velocity and direction are, since the phone
+fits measured eye velocity against the *commanded* value, not against a live position
+feed.

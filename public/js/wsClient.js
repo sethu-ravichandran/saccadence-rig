@@ -2,8 +2,9 @@
 // message *means*; just parses JSON and hands it to a callback.
 
 export class WsClient {
-  constructor({ onMessage }) {
+  constructor({ onMessage, onOpen }) {
     this.onMessage = onMessage;
+    this.onOpen = onOpen ?? (() => {});
     this.ws = null;
     this.reconnectDelay = 500;
     this._connect();
@@ -15,6 +16,9 @@ export class WsClient {
     this.ws.onopen = () => {
       console.log('[ws] connected');
       this.reconnectDelay = 500;
+      // Fires on first connect AND on every reconnect, so whoever owns
+      // session registration doesn't need its own reconnect logic.
+      this.onOpen();
     };
 
     this.ws.onmessage = (ev) => {
