@@ -6,8 +6,17 @@
 // keydown, no chords, no held-key repeats relied upon. Nothing else in this
 // app listens for keyboard input.
 
+const FORM_TAGS = new Set(['INPUT', 'TEXTAREA', 'SELECT']);
+
 export function attachControlSurface({ onStart, onRepeat, onStop, onSelectProtocol }) {
   window.addEventListener('keydown', (e) => {
+    // The start screen's PIN/username/settings form lives in the same
+    // document and shares this window-level listener. Without this guard,
+    // typing "1" or "2" into the PIN field never reaches the input — it's
+    // consumed here as a protocol-select shortcut first (preventDefault
+    // included), so the passcode can never actually be typed.
+    if (e.target instanceof HTMLElement && FORM_TAGS.has(e.target.tagName)) return;
+
     if (e.code === 'Space') {
       e.preventDefault();
       onStart();

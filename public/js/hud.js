@@ -71,6 +71,7 @@ export function attachHud() {
   const hudEl = document.getElementById('hud');
   const titleEl = document.getElementById('hud-title');
   const subtitleEl = document.getElementById('hud-subtitle');
+  const timeEl = document.getElementById('hud-time');
   const sessionEl = document.getElementById('hud-session');
   const progressTrack = document.getElementById('hud-progress-track');
   const progressFill = document.getElementById('hud-progress-fill');
@@ -82,6 +83,11 @@ export function attachHud() {
   const legendDismiss = document.getElementById('legend-dismiss');
   const phonePill = document.getElementById('phone-pill');
   const markerLegend = document.getElementById('marker-legend');
+
+  // Set true only once the phone's camera has locked the guard marker and
+  // the clinician has tapped "Start test" there (the phone_ready message) —
+  // overrides the generic setup-calibration subtitle with a live status.
+  let markerConfirmed = false;
 
   // Sit behind the full-screen login/pairing overlay (lower z-index) until
   // it's dismissed — safe to reveal immediately, same pattern as before.
@@ -102,6 +108,14 @@ export function attachHud() {
     phonePill.classList.toggle('warn', !paired);
   }
 
+  function setMarkerConfirmed(confirmed) {
+    markerConfirmed = confirmed;
+  }
+
+  function setTimingText(text) {
+    timeEl.textContent = text;
+  }
+
   /** Positions the "read by phone camera" label above the marker strip, wherever it currently sits. */
   function positionMarkerLegend(canvasWidth, canvasHeight, active) {
     const { side, pitch, guardCenterX, guardCenterY } = markerGeometry(canvasWidth, canvasHeight, config.marker);
@@ -114,6 +128,11 @@ export function attachHud() {
   function update(state) {
     const content = PHASE_CONTENT[state.state] ?? { title: state.state, subtitle: '' };
     let title = content.title;
+    let subtitle = content.subtitle;
+
+    if (state.state === RigState.SETUP_CALIBRATION && markerConfirmed) {
+      subtitle = 'Marker confirmed by phone ✓ — press Space to end calibration.';
+    }
 
     progressTrack.hidden = true;
     stepsEl.hidden = true;
@@ -141,12 +160,12 @@ export function attachHud() {
     }
 
     titleEl.textContent = title;
-    subtitleEl.textContent = content.subtitle;
+    subtitleEl.textContent = subtitle;
 
     if (state.canvasWidth && state.canvasHeight) {
       positionMarkerLegend(state.canvasWidth, state.canvasHeight, MARKER_READ_STATES.has(state.state));
     }
   }
 
-  return { update, setSessionInfo, setPhonePaired };
+  return { update, setSessionInfo, setPhonePaired, setMarkerConfirmed, setTimingText };
 }

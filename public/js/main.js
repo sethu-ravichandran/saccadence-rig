@@ -10,6 +10,7 @@ import { attachControlSurface } from './controlSurface.js';
 import { attachStartScreen, setPaired } from './startScreen.js';
 import { attachHud } from './hud.js';
 import { RigState } from './rigState.js';
+import { estimatedDurationMs } from './protocolTiming.js';
 
 const canvas = document.getElementById('stage');
 const renderer = new Renderer(canvas);
@@ -21,6 +22,14 @@ const hud = attachHud();
 // re-sent on every ws (re)connect, so a mid-demo reconnect re-registers the
 // same session without operator action.
 let sessionCode = null;
+
+// Set once the phone's camera has locked the guard marker and the clinician
+// has tapped "Start test" there (phone_ready). Space can't end the setup
+// gate — and so can't move the rig into a trial — until this is true, per
+// the "don't enter until the marker is detected and Start test is tapped"
+// requirement. Reset on every fresh setup-calibration entry so a rig
+// restart/reconnect can't carry a stale confirmation into a new session.
+let markerConfirmedByPhone = false;
 
 const ws = new WsClient({
   onOpen: () => {
@@ -36,8 +45,19 @@ const ws = new WsClient({
       hud.setPhonePaired(msg.count > 1);
     }
     else if (type === 'join_ack' && !msg.ok) console.log('[ws] join rejected:', msg.reason);
+    else if (type === 'phone_ready') {
+      console.log('[phone] marker locked, ready ✓ — Space will now end calibration.');
+      markerConfirmedByPhone = true;
+      hud.setMarkerConfirmed(true);
+    }
   },
 });
+
+// Drives the HUD's "time remaining" line — set on trial_config (fires for
+// both a locally-started trial and one driven remotely via Office Kit),
+// cleared once the trial reaches COMPLETED.
+let trialStartMs = null;
+let trialPlannedMs = 0;
 
 const trial = new TrialController({
   markerEncoder,
@@ -48,9 +68,32 @@ const trial = new TrialController({
   },
   onEvent: (evt) => {
     console.log('[event]', evt.type, evt);
+    if (evt.type === 'trial_config') {
+      trialStartMs = performance.now();
+      trialPlannedMs = estimatedDurationMs(config.protocols[evt.protocolId], config.calibrationMs);
+    }
     ws.send(evt);
   },
 });
+
+// Feeds hud.js's time-remaining/estimate line — hud.js owns the DOM, this
+// just computes the string (mirrors TrialController's own timer scheduling
+// via protocolTiming.js so the estimate stays consistent with what runs).
+function updateTiming() {
+  if (trial.state === RigState.SETUP_CALIBRATION) {
+    hud.setTimingText('');
+    return;
+  }
+  if (trial.state === RigState.READY || trial.state === RigState.COMPLETED) {
+    trialStartMs = null;
+    const protocol = config.protocols[config.protocolId];
+    const estSec = Math.round(estimatedDurationMs(protocol, config.calibrationMs) / 1000);
+    hud.setTimingText(`${protocol.label} — est. ${estSec}s`);
+  } else if (trialStartMs !== null) {
+    const remainingMs = Math.max(0, trialPlannedMs - (performance.now() - trialStartMs));
+    hud.setTimingText(`~${Math.ceil(remainingMs / 1000)}s remaining`);
+  }
+}
 
 function resize() {
   renderer.resize();
@@ -62,8 +105,15 @@ resize();
 attachControlSurface({
   onStart: () => {
     // First Space after the setup gate ends it; every Space after that starts a trial.
-    if (trial.state === RigState.SETUP_CALIBRATION) trial.endSetupCalibration();
-    else ws.send(trial.start('local-test'));
+    if (trial.state === RigState.SETUP_CALIBRATION) {
+      if (!markerConfirmedByPhone) {
+        console.log('[calibration] Space ignored — waiting for the phone to confirm marker lock and tap Start test.');
+        return;
+      }
+      trial.endSetupCalibration();
+    } else {
+      ws.send(trial.start('local-test'));
+    }
   },
   onRepeat: () => ws.send(trial.start('repeat')),
   onStop: () => {
@@ -73,8 +123,14 @@ attachControlSurface({
   },
   onSelectProtocol: (protocolId) => {
     // Only meaningful before a trial starts; harmless no-op mid-run since
-    // TrialController snapshots the protocol at start().
-    if (trial.state !== RigState.READY && trial.state !== RigState.COMPLETED) return;
+    // TrialController snapshots the protocol at start(). SETUP_CALIBRATION
+    // counts as "before a trial starts" too — a clinician picking the
+    // protocol while still confirming marker lock is the normal order of
+    // operations, not a mid-run change.
+    const midRun = trial.state !== RigState.SETUP_CALIBRATION
+      && trial.state !== RigState.READY
+      && trial.state !== RigState.COMPLETED;
+    if (midRun) return;
     config.protocolId = protocolId;
     console.log('[protocol]', protocolId);
   },
@@ -89,6 +145,8 @@ attachStartScreen({
   onEnter: (settings) => {
     console.log('[session]', settings);
     hud.setSessionInfo({ sessionCode: settings.sessionCode, protocolLabel: settings.protocolLabel });
+    markerConfirmedByPhone = false;
+    hud.setMarkerConfirmed(false);
     trial.beginSetupCalibration();
   },
 });
@@ -97,6 +155,7 @@ attachStartScreen({
 // actual rendered frame, regardless of whether a step jump happened.
 function loop() {
   trial.tick();
+  updateTiming();
   requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);

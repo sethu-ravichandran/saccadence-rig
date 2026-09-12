@@ -89,6 +89,7 @@
   #hud[hidden] { display: none; }
   #hud-title { font-weight: 600; font-size: 13px; color: #e8e8e8; }
   #hud-subtitle { font-size: 11px; color: #9a9aa4; margin-top: 2px; }
+  #hud-time { font-size: 11px; color: #4ade80; font-weight: 600; margin-top: 4px; }
   #hud-session {
     font-size: 11px; color: #6c6f78; margin-top: 8px;
     padding-top: 8px; border-top: 1px solid rgba(255, 255, 255, 0.08);
@@ -221,11 +222,11 @@
     </section>
   </div>
 </div>
-
 <!-- Live-trial status, hidden until a session actually starts (see hud.js). -->
 <div id="hud" hidden>
   <div id="hud-title">Ready</div>
   <div id="hud-subtitle"></div>
+  <div id="hud-time"></div>
   <div id="hud-progress-track" hidden><div id="hud-progress-fill"></div></div>
   <div id="hud-steps" hidden></div>
   <div id="hud-pursuit" hidden>
@@ -237,7 +238,7 @@
 <div id="phone-pill" hidden>📱 Waiting…</div>
 <div id="marker-legend" hidden>Read by phone camera</div>
 <div id="shortcut-legend" hidden>
-  <span>Space start/repeat &middot; R repeat &middot; Esc stop</span>
+  <span>Space start/repeat &middot; R repeat &middot; Esc stop &middot; 1 full &middot; 2 saccade-only</span>
   <button type="button" id="legend-dismiss" aria-label="Dismiss shortcut legend">&times;</button>
 </div>
 
