@@ -14,6 +14,9 @@ function randomSessionCode() {
 }
 
 let pairStatusEl = null;
+let enterButtonEl = null;
+let markerStatusEl = null;
+let markerReady = false;
 
 /** Called from main.js on every peer_count WS message — count includes this rig tab itself. */
 export function setPaired(count) {
@@ -21,6 +24,23 @@ export function setPaired(count) {
   const paired = count > 1;
   pairStatusEl.textContent = paired ? 'Paired ✓' : 'Waiting for phone…';
   pairStatusEl.style.color = paired ? '#4ade80' : '#888';
+}
+
+/**
+ * Called from main.js on `phone_ready` — the phone only sends that once its
+ * camera has locked onto the guard marker and the clinician has tapped
+ * "Start test" there. Enter stays disabled until this fires, so the rig
+ * can't move into the trial before the phone can actually see the marker.
+ */
+export function setMarkerReady(ready) {
+  markerReady = ready;
+  if (enterButtonEl) enterButtonEl.disabled = !ready;
+  if (markerStatusEl) {
+    markerStatusEl.textContent = ready
+      ? 'Marker confirmed by phone ✓'
+      : "Point the phone's camera at the marker (bottom-right) to unlock Enter.";
+    markerStatusEl.style.color = ready ? '#4ade80' : '#888';
+  }
 }
 
 /**
@@ -57,6 +77,8 @@ export function attachStartScreen({ config, onEnter, onSessionCode }) {
   const sessionCodeEl = document.getElementById('session-code');
   const qrEl = document.getElementById('session-qr');
   pairStatusEl = document.getElementById('pair-status');
+  enterButtonEl = document.getElementById('enter-button');
+  markerStatusEl = document.getElementById('marker-status');
 
   const sessionCode = randomSessionCode();
   sessionCodeEl.textContent = sessionCode;
@@ -69,6 +91,13 @@ export function attachStartScreen({ config, onEnter, onSessionCode }) {
 
   form.addEventListener('submit', (e) => {
     e.preventDefault();
+    // Belt-and-braces beyond the disabled attribute: some browsers still fire
+    // a form's default-button submit on Enter-in-a-text-field even when that
+    // button is disabled.
+    if (!markerReady) {
+      errorEl.textContent = "Waiting for the phone to confirm marker lock — can't start yet.";
+      return;
+    }
     const pin = form.pin.value.trim();
     if (pin !== DEMO_PIN) {
       errorEl.textContent = 'Incorrect PIN';

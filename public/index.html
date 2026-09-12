@@ -11,7 +11,12 @@
   #start-screen {
     position: fixed; inset: 0; z-index: 10;
     display: flex; align-items: center; justify-content: center;
-    background: #0b0b0d; color: #e8e8e8;
+    /* Transparent, not opaque: the guard marker renders in the canvas's
+       bottom-right corner from the very first frame (see trialController.js
+       — SETUP_CALIBRATION is the constructor's default state), and the phone
+       needs to see it to confirm lock *before* Enter is clickable. An opaque
+       background here would hide it behind this login panel the whole time. */
+    background: transparent; color: #e8e8e8;
     font-family: -apple-system, BlinkMacSystemFont, sans-serif;
   }
   #start-screen .panel {
@@ -30,7 +35,11 @@
     width: 100%; margin-top: 22px; padding: 10px; border: none; border-radius: 6px;
     background: #3a7bfd; color: #fff; font-size: 14px; cursor: pointer;
   }
+  #start-screen button:disabled {
+    background: #2a2f3a; color: #777; cursor: not-allowed;
+  }
   #start-error { color: #ff6b6b; font-size: 12px; min-height: 16px; margin-top: 8px; }
+  #marker-status { font-size: 12px; color: #888; margin-top: 8px; }
   #session-code-row {
     margin-top: 18px; padding-top: 14px; border-top: 1px solid #2a2a30;
     font-size: 12px; color: #888;
@@ -39,6 +48,16 @@
   #pair-status { margin-top: 6px; font-size: 12px; color: #888; }
   #session-qr { margin-top: 12px; width: 132px; background: #fff; padding: 8px; border-radius: 6px; }
   #session-qr svg { display: block; width: 100%; height: 100%; }
+
+  #hud {
+    position: fixed; top: 14px; left: 14px; z-index: 5;
+    background: rgba(11, 11, 13, 0.82); color: #e8e8e8;
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    font-size: 12px; line-height: 1.6; padding: 10px 14px;
+    border-radius: 8px; border: 1px solid #2a2a30; pointer-events: none;
+  }
+  #hud .key { color: #7fb2ff; font-weight: 600; }
+  #hud #hud-time { margin-top: 6px; color: #4ade80; font-weight: 600; }
 </style>
 </head>
 <body>
@@ -72,7 +91,8 @@
       </select>
 
       <div id="start-error"></div>
-      <button type="submit">Enter</button>
+      <button type="submit" id="enter-button" disabled>Enter</button>
+      <div id="marker-status">Point the phone's camera at the marker (bottom-right) to unlock Enter.</div>
 
       <div id="session-code-row">
         Pair mobile — session code: <span id="session-code">------</span>
@@ -81,6 +101,14 @@
       </div>
     </form>
   </div>
+</div>
+<div id="hud">
+  <div><span class="key">Space</span> — end calibration / start next trial</div>
+  <div><span class="key">R</span> — repeat trial</div>
+  <div><span class="key">Esc</span> — stop</div>
+  <div><span class="key">1</span> — full protocol (saccade + pursuit)</div>
+  <div><span class="key">2</span> — saccade-only protocol</div>
+  <div id="hud-time"></div>
 </div>
 <canvas id="stage"></canvas>
 <!-- Classic (non-module) script: puts qrcode() on window ahead of main.js. -->
