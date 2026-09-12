@@ -3,17 +3,20 @@ import assert from 'node:assert/strict';
 import { TrialController } from '../public/js/trialController.js';
 import { MarkerEncoder } from '../public/js/markerEncoder.js';
 import { config } from '../public/js/config.js';
+import { RigState } from '../public/js/rigState.js';
 
 function makeController() {
   const frames = [];
+  const events = [];
   const markerEncoder = new MarkerEncoder(config.marker);
   const trial = new TrialController({
     markerEncoder,
     config,
     onFrame: (state) => frames.push(state),
+    onEvent: (evt) => events.push(evt),
   });
   trial.setCanvasSize(1920, 1080);
-  return { trial, markerEncoder, frames };
+  return { trial, markerEncoder, frames, events };
 }
 
 test('start() centers the dot and activates the guard', () => {
@@ -53,4 +56,52 @@ test('tick() advances the marker frame counter without moving the dot', () => {
   assert.equal(markerEncoder.frameId, (before + 1) & 0xff);
   assert.equal(trial.dotX, 500);
   trial.stop();
+});
+
+test('starts in calibration; beginCalibration emits calibration_start with a laptop timestamp', () => {
+  const { trial, events } = makeController();
+  assert.equal(trial.state, RigState.CALIBRATION);
+  trial.beginCalibration();
+  const evt = events.at(-1);
+  assert.equal(evt.type, 'calibration_start');
+  assert.equal(typeof evt.laptopTimeMs, 'number');
+});
+
+test('endCalibration emits calibration_stop and moves to Ready; no-ops outside calibration', () => {
+  const { trial, events } = makeController();
+  trial.beginCalibration();
+  trial.endCalibration();
+  assert.equal(trial.state, RigState.READY);
+  assert.equal(events.at(-1).type, 'calibration_stop');
+
+  const before = events.length;
+  trial.endCalibration(); // already Ready — must not re-fire
+  assert.equal(events.length, before);
+});
+
+test('start() moves to Running and stepping through targets emits target_step events', () => {
+  const { trial, events } = makeController();
+  trial.start('subject-1');
+  assert.equal(trial.state, RigState.RUNNING);
+
+  const first = events.find((e) => e.type === 'target_step');
+  assert.ok(first, 'expected a target_step event on trial start');
+  assert.equal(first.targetIndex, 0);
+  assert.equal(first.x, 960);
+  assert.equal(first.y, 540);
+  assert.equal(typeof first.trialId, 'string');
+  assert.equal(typeof first.laptopTimeMs, 'number');
+
+  trial.manualTarget(100, 200);
+  const second = events.filter((e) => e.type === 'target_step').at(-1);
+  assert.equal(second.targetIndex, 1);
+  assert.equal(second.trialId, first.trialId);
+  trial.stop();
+});
+
+test('stop() returns state to Ready', () => {
+  const { trial } = makeController();
+  trial.start('subject-1');
+  trial.stop();
+  assert.equal(trial.state, RigState.READY);
 });

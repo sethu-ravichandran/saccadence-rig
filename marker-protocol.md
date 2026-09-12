@@ -58,3 +58,20 @@ would be affected.
 → next_target   { x, y, t_planned_ms }
 → stop          {}
 ```
+
+## Orchestration events the rig emits (added for calibration + target correlation)
+
+These are separate from the marker itself (still camera-only, per above) — they're
+timestamped WS broadcasts so Android can correlate its own clock/frames to laptop-side
+state changes. `laptopTimeMs` is `performance.now()` (monotonic, page-load-relative),
+not a wall-clock epoch — offset calculation against Android's clock is NOT solved yet,
+this just gets the raw numbers on the wire.
+
+```
+← calibration_start  { laptopTimeMs }
+← calibration_stop   { laptopTimeMs }
+← target_step        { trialId, targetIndex, x, y, laptopTimeMs }
+```
+
+`target_step` fires once per dot placement during a running trial — index 0 is the
+initial center dot, indices 1..N follow `config.stepDegrees`.

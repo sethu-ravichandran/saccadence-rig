@@ -9,9 +9,17 @@ function attachWsRelay(httpServer) {
   const wss = new WebSocket.Server({ server: httpServer });
   const clients = new Set();
 
+  function broadcastPeerCount() {
+    const payload = JSON.stringify({ type: 'peer_count', count: clients.size });
+    for (const c of clients) {
+      if (c.readyState === WebSocket.OPEN) c.send(payload);
+    }
+  }
+
   wss.on('connection', (ws, req) => {
     clients.add(ws);
     console.log(`[ws] connected from ${req.socket.remoteAddress} (${clients.size} total)`);
+    broadcastPeerCount();
 
     ws.on('message', (raw) => {
       let msg;
@@ -32,6 +40,7 @@ function attachWsRelay(httpServer) {
     ws.on('close', () => {
       clients.delete(ws);
       console.log(`[ws] disconnected (${clients.size} remaining) — server keeps running`);
+      broadcastPeerCount();
     });
 
     ws.on('error', (err) => console.log('[ws] error:', err.message));
