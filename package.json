@@ -1,0 +1,14 @@
+{
+  "name": "saccadence-stimulus-rig",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Laptop-side stimulus page + WS relay for Saccadence (team arra, iQOO Hackathon 2026)",
+  "scripts": {
+    "start": "node server/server.js",
+    "test": "node --test test/"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}
