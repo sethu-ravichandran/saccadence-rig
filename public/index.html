@@ -6,7 +6,8 @@
 <style>
   html, body { margin: 0; padding: 0; overflow: hidden; background: #000; height: 100%; }
   canvas { display: block; }
-  /* stage stays clean for the jury — all status only in the console */
+
+  :focus-visible { outline: 2px solid #3a7bfd; outline-offset: 2px; }
 
   #start-screen {
     position: fixed; inset: 0; z-index: 10;
@@ -14,74 +15,232 @@
     background: #0b0b0d; color: #e8e8e8;
     font-family: -apple-system, BlinkMacSystemFont, sans-serif;
   }
-  #start-screen .panel {
-    width: 360px; padding: 32px; border-radius: 12px;
+  .wizard { width: 380px; }
+  .progress { display: flex; gap: 6px; justify-content: center; margin-bottom: 14px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: #333; }
+  .dot.active { background: #3a7bfd; }
+
+  .panel {
+    width: 100%; box-sizing: border-box; padding: 32px; border-radius: 12px;
     background: #16161a; border: 1px solid #2a2a30;
   }
-  #start-screen h1 { font-size: 18px; margin: 0 0 4px; }
-  #start-screen .sub { font-size: 12px; color: #888; margin: 0 0 20px; }
-  #start-screen label { display: block; font-size: 12px; color: #aaa; margin: 14px 0 4px; }
-  #start-screen input, #start-screen select {
+  .step-label {
+    font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase;
+    color: #8b9bea; margin-bottom: 6px;
+  }
+  .panel h1 { font-size: 18px; margin: 0 0 4px; }
+  .panel .sub { font-size: 12px; color: #9a9aa4; margin: 0 0 20px; }
+  .panel label { display: block; font-size: 12px; color: #aaa; margin: 14px 0 4px; }
+  .panel input {
     width: 100%; box-sizing: border-box; padding: 8px 10px;
     background: #0e0e11; border: 1px solid #333; border-radius: 6px;
     color: #e8e8e8; font-size: 13px;
   }
-  #start-screen button {
-    width: 100%; margin-top: 22px; padding: 10px; border: none; border-radius: 6px;
-    background: #3a7bfd; color: #fff; font-size: 14px; cursor: pointer;
-  }
   #start-error { color: #ff6b6b; font-size: 12px; min-height: 16px; margin-top: 8px; }
-  #session-code-row {
-    margin-top: 18px; padding-top: 14px; border-top: 1px solid #2a2a30;
-    font-size: 12px; color: #888;
+
+  .btn-primary {
+    width: 100%; margin-top: 22px; padding: 12px; border: none; border-radius: 6px;
+    background: #3a7bfd; color: #fff; font-size: 14px; font-weight: 600; cursor: pointer;
   }
-  #session-code { font-size: 16px; letter-spacing: 3px; color: #e8e8e8; font-weight: 600; }
-  #pair-status { margin-top: 6px; font-size: 12px; color: #888; }
-  #session-qr { margin-top: 12px; width: 132px; background: #fff; padding: 8px; border-radius: 6px; }
+  .btn-primary:disabled { background: #2a3a5a; color: #7a8bb0; cursor: not-allowed; }
+  .btn-ghost {
+    padding: 8px 12px; border: 1px solid #333; border-radius: 6px;
+    background: #22232a; color: #cfd2da; font-size: 12px; cursor: pointer;
+  }
+
+  /* Step 1 — pairing is the star of its own screen, centered. */
+  #step-pair { text-align: center; }
+  #step-pair .sub { text-align: center; }
+  #session-qr {
+    width: 180px; height: 180px; margin: 16px auto; background: #fff;
+    padding: 8px; border-radius: 6px;
+  }
   #session-qr svg { display: block; width: 100%; height: 100%; }
+  .code-row { font-size: 13px; color: #9a9aa4; }
+  #session-code { font-size: 20px; letter-spacing: 3px; color: #e8e8e8; font-weight: 600; margin-left: 6px; }
+  #pair-status { margin-top: 10px; font-size: 13px; font-weight: 600; color: #9a9aa4; }
+
+  /* Step 2 — sign in */
+  .pin-row { display: flex; gap: 6px; }
+  .pin-row input { flex: 1; }
+  #pin-toggle { margin-top: 0; flex-shrink: 0; }
+
+  /* Step 3 — session setup: protocol as visible cards, not a hidden <select> */
+  .protocol-cards { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
+  .protocol-card {
+    display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+    text-align: left; width: 100%; box-sizing: border-box; padding: 12px 14px;
+    border-radius: 8px; border: 1px solid #333; background: #0e0e11;
+    color: #e8e8e8; cursor: pointer;
+  }
+  .protocol-card strong { font-size: 13px; }
+  .protocol-card span { font-size: 11px; color: #9a9aa4; }
+  .protocol-card[aria-checked="true"] { border-color: #3a7bfd; background: rgba(58, 123, 253, 0.14); }
+
+  /* Live-trial HUD — visibility of system status, kept small and corner-anchored
+     so it informs the clinician without becoming jury-facing chrome. */
+  #hud {
+    position: fixed; top: 14px; left: 14px; z-index: 5; max-width: 300px;
+    padding: 10px 12px; border-radius: 8px;
+    background: rgba(14, 14, 17, 0.78); border: 1px solid rgba(255, 255, 255, 0.08);
+    font: 12px/1.4 -apple-system, BlinkMacSystemFont, sans-serif;
+    color: #c7c9d1; pointer-events: none;
+  }
+  #hud[hidden] { display: none; }
+  #hud-title { font-weight: 600; font-size: 13px; color: #e8e8e8; }
+  #hud-subtitle { font-size: 11px; color: #9a9aa4; margin-top: 2px; }
+  #hud-session {
+    font-size: 11px; color: #6c6f78; margin-top: 8px;
+    padding-top: 8px; border-top: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  #hud-progress-track {
+    margin-top: 8px; height: 4px; border-radius: 2px;
+    background: rgba(255, 255, 255, 0.1); overflow: hidden;
+  }
+  #hud-progress-track[hidden] { display: none; }
+  #hud-progress-fill { height: 100%; background: #3a7bfd; width: 0%; }
+
+  #hud-steps { display: flex; gap: 4px; margin-top: 8px; }
+  #hud-steps[hidden] { display: none; }
+  .hud-dot { width: 6px; height: 6px; border-radius: 50%; background: rgba(255, 255, 255, 0.15); }
+  .hud-dot.filled { background: #3a7bfd; }
+
+  #hud-pursuit { display: flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 12px; }
+  #hud-pursuit[hidden] { display: none; }
+  #hud-pursuit-arrow { color: #3a7bfd; font-size: 14px; }
+
+  /* Persistent phone-connection status — survives past the pairing screen
+     into the live trial, so the phone/rig relationship stays visible. */
+  #phone-pill {
+    position: fixed; top: 14px; right: 14px; z-index: 5;
+    padding: 6px 10px; border-radius: 999px;
+    background: rgba(14, 14, 17, 0.78); border: 1px solid rgba(255, 255, 255, 0.08);
+    font: 11px -apple-system, BlinkMacSystemFont, sans-serif; color: #4ade80;
+    pointer-events: none;
+  }
+  #phone-pill[hidden] { display: none; }
+  #phone-pill.warn { color: #ff9a6b; }
+
+  /* Always labels the marker strip as "for the phone"; glows only during the
+     windows the phone is actually decoding it, so idle-vs-active is legible
+     instead of the marker just looking like a random flickering artifact. */
+  #marker-legend {
+    position: fixed; z-index: 5; transform: translate(-50%, 0);
+    padding: 3px 8px; border-radius: 5px;
+    background: rgba(14, 14, 17, 0.78); border: 1px solid rgba(255, 255, 255, 0.08);
+    font: 10px -apple-system, BlinkMacSystemFont, sans-serif; color: #6c6f78;
+    white-space: nowrap; pointer-events: none;
+  }
+  #marker-legend[hidden] { display: none; }
+  #marker-legend.active {
+    color: #4ade80; border-color: rgba(74, 222, 128, 0.4);
+    animation: marker-pulse 1.4s ease-in-out infinite;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    #marker-legend.active { animation: none; }
+  }
+  @keyframes marker-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.55; }
+  }
+
+  #shortcut-legend {
+    position: fixed; bottom: 14px; left: 14px; z-index: 5;
+    display: flex; align-items: center; gap: 10px;
+    padding: 6px 10px; border-radius: 6px;
+    background: rgba(14, 14, 17, 0.72); border: 1px solid rgba(255, 255, 255, 0.08);
+    font: 11px -apple-system, BlinkMacSystemFont, sans-serif; color: #9a9aa4;
+  }
+  #shortcut-legend[hidden] { display: none; }
+  #legend-dismiss {
+    background: none; border: none; color: #9a9aa4; font-size: 15px; line-height: 1;
+    cursor: pointer; padding: 0 2px;
+  }
 </style>
 </head>
 <body>
 <div id="start-screen">
-  <div class="panel">
-    <h1>Saccadence — Clinic Rig</h1>
-    <p class="sub">Enter credentials to begin a session</p>
-    <form id="start-form">
-      <label>Username</label>
-      <input name="username" type="text" autocomplete="off" value="clinician">
+  <div class="wizard">
+    <div class="progress" aria-hidden="true">
+      <span class="dot active" data-step="1"></span>
+      <span class="dot" data-step="2"></span>
+      <span class="dot" data-step="3"></span>
+    </div>
 
-      <label>PIN</label>
-      <input name="pin" type="password" inputmode="numeric" autocomplete="off">
+    <section class="panel" id="step-pair" data-step="1">
+      <div class="step-label">Step 1 of 3 &middot; Pair device</div>
+      <h1>Pair the phone</h1>
+      <p class="sub">Scan this on the phone app, or type the code in.</p>
+      <div id="session-qr"></div>
+      <div class="code-row">Session code<span id="session-code">------</span></div>
+      <div id="pair-status" role="status" aria-live="polite">Waiting for phone&hellip;</div>
+      <button type="button" class="btn-primary" id="pair-continue" disabled>Continue</button>
+    </section>
 
-      <label>Screen width (mm)</label>
-      <input name="screenWidth" type="number">
+    <section class="panel" id="step-login" data-step="2" hidden>
+      <div class="step-label">Step 2 of 3 &middot; Clinician sign-in</div>
+      <h1>Sign in</h1>
+      <form id="login-form">
+        <label for="field-username">Username</label>
+        <input id="field-username" name="username" type="text" autocomplete="off" value="clinician">
 
-      <label>Viewing distance (mm)</label>
-      <input name="viewDist" type="number">
+        <label for="field-pin">PIN</label>
+        <div class="pin-row">
+          <input id="field-pin" name="pin" type="password" inputmode="numeric" autocomplete="off">
+          <button type="button" class="btn-ghost" id="pin-toggle" aria-label="Show PIN">Show</button>
+        </div>
 
-      <label>Protocol</label>
-      <select name="protocol">
-        <option value="full-90s">Full Protocol — saccade + pursuit (~90s)</option>
-        <option value="saccade-latency-10step">Saccade Latency only (10-step)</option>
-      </select>
+        <div id="start-error" role="alert" aria-live="assertive"></div>
+        <button type="submit" class="btn-primary">Continue</button>
+      </form>
+    </section>
 
-      <label>Language</label>
-      <select name="language">
-        <option value="en">English</option>
-        <option value="ta">தமிழ் (Tamil)</option>
-      </select>
+    <section class="panel" id="step-setup" data-step="3" hidden>
+      <div class="step-label">Step 3 of 3 &middot; Session setup</div>
+      <h1>Session setup</h1>
+      <form id="setup-form">
+        <label for="field-width">Screen width (mm)</label>
+        <input id="field-width" name="screenWidth" type="number">
 
-      <div id="start-error"></div>
-      <button type="submit">Enter</button>
+        <label for="field-dist">Viewing distance (mm)</label>
+        <input id="field-dist" name="viewDist" type="number">
 
-      <div id="session-code-row">
-        Pair mobile — session code: <span id="session-code">------</span>
-        <div id="session-qr"></div>
-        <div id="pair-status">Waiting for phone…</div>
-      </div>
-    </form>
+        <label id="protocol-label">Protocol</label>
+        <div class="protocol-cards" role="radiogroup" aria-labelledby="protocol-label">
+          <button type="button" class="protocol-card" data-value="full-90s" role="radio" aria-checked="true">
+            <strong>Full Protocol</strong><span>Saccade + pursuit &middot; ~90s</span>
+          </button>
+          <button type="button" class="protocol-card" data-value="saccade-latency-10step" role="radio" aria-checked="false">
+            <strong>Saccade Latency</strong><span>10-step &middot; shorter</span>
+          </button>
+        </div>
+
+        <button type="submit" class="btn-primary">Begin session</button>
+      </form>
+    </section>
   </div>
 </div>
+
+<!-- Live-trial status, hidden until a session actually starts (see hud.js). -->
+<div id="hud" hidden>
+  <div id="hud-title">Ready</div>
+  <div id="hud-subtitle"></div>
+  <div id="hud-progress-track" hidden><div id="hud-progress-fill"></div></div>
+  <div id="hud-steps" hidden></div>
+  <div id="hud-pursuit" hidden>
+    <span id="hud-pursuit-arrow">&rarr;</span>
+    <span id="hud-pursuit-label"></span>
+  </div>
+  <div id="hud-session"></div>
+</div>
+<div id="phone-pill" hidden>📱 Waiting…</div>
+<div id="marker-legend" hidden>Read by phone camera</div>
+<div id="shortcut-legend" hidden>
+  <span>Space start/repeat &middot; R repeat &middot; Esc stop</span>
+  <button type="button" id="legend-dismiss" aria-label="Dismiss shortcut legend">&times;</button>
+</div>
+
 <canvas id="stage"></canvas>
 <!-- Classic (non-module) script: puts qrcode() on window ahead of main.js. -->
 <script src="vendor/qrcode.js"></script>

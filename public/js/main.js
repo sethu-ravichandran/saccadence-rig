@@ -8,11 +8,13 @@ import { TrialController } from './trialController.js';
 import { WsClient } from './wsClient.js';
 import { attachControlSurface } from './controlSurface.js';
 import { attachStartScreen, setPaired } from './startScreen.js';
+import { attachHud } from './hud.js';
 import { RigState } from './rigState.js';
 
 const canvas = document.getElementById('stage');
 const renderer = new Renderer(canvas);
 const markerEncoder = new MarkerEncoder(config.marker);
+const hud = attachHud();
 
 // Set by attachStartScreen's onSessionCode as soon as the page generates its
 // pairing code (before the operator has even submitted the login form) and
@@ -29,7 +31,10 @@ const ws = new WsClient({
     if (type === 'start_trial') trial.start(msg.subject_id);
     else if (type === 'next_target') trial.manualTarget(msg.x, msg.y);
     else if (type === 'stop') trial.stop();
-    else if (type === 'peer_count') setPaired(msg.count);
+    else if (type === 'peer_count') {
+      setPaired(msg.count);
+      hud.setPhonePaired(msg.count > 1);
+    }
     else if (type === 'join_ack' && !msg.ok) console.log('[ws] join rejected:', msg.reason);
   },
 });
@@ -37,7 +42,10 @@ const ws = new WsClient({
 const trial = new TrialController({
   markerEncoder,
   config,
-  onFrame: (state) => renderer.draw(state),
+  onFrame: (state) => {
+    renderer.draw(state);
+    hud.update(state);
+  },
   onEvent: (evt) => {
     console.log('[event]', evt.type, evt);
     ws.send(evt);
@@ -80,6 +88,7 @@ attachStartScreen({
   },
   onEnter: (settings) => {
     console.log('[session]', settings);
+    hud.setSessionInfo({ sessionCode: settings.sessionCode, protocolLabel: settings.protocolLabel });
     trial.beginSetupCalibration();
   },
 });

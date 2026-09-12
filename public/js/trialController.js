@@ -41,6 +41,12 @@ export class TrialController {
     this.pursuitPassIndex = 0;
     this.canvasWidth = 0;
     this.canvasHeight = 0;
+    // HUD-only: when the current timed phase started and how long it runs,
+    // so the on-screen progress bar can compute elapsed/remaining itself
+    // instead of the rig ticking down a number. Only meaningful during
+    // PRE_CALIBRATION/FIXATION/POST_CALIBRATION — the HUD ignores it elsewhere.
+    this.phaseStartMs = null;
+    this.phaseDurationMs = null;
   }
 
   setCanvasSize(width, height) {
@@ -126,6 +132,8 @@ export class TrialController {
   _enterPreCalibration() {
     this.state = RigState.PRE_CALIBRATION;
     this.markerEncoder.setActive(true);
+    this.phaseStartMs = now();
+    this.phaseDurationMs = this.config.calibrationMs;
     this._paint();
     this.onEvent({ type: 'calibration_start', role: 'pre', trialId: this.trialId, laptopTimeMs: now() });
     this.phaseTimer = setTimeout(() => this._endPreCalibration(), this.config.calibrationMs);
@@ -139,6 +147,8 @@ export class TrialController {
 
   _enterFixation() {
     this.state = RigState.FIXATION;
+    this.phaseStartMs = now();
+    this.phaseDurationMs = this.protocol.fixationMs;
     this._jumpTo(this.canvasWidth / 2, this.canvasHeight / 2);
     this.onEvent({ type: 'block_start', block: 'fixation', trialId: this.trialId, laptopTimeMs: now() });
     this.phaseTimer = setTimeout(() => this._endFixation(), this.protocol.fixationMs);
@@ -261,6 +271,8 @@ export class TrialController {
   _enterPostCalibration() {
     this.state = RigState.POST_CALIBRATION;
     this.markerEncoder.setActive(true);
+    this.phaseStartMs = now();
+    this.phaseDurationMs = this.config.calibrationMs;
     this._jumpTo(this.canvasWidth / 2, this.canvasHeight / 2);
     this.onEvent({ type: 'calibration_start', role: 'post', trialId: this.trialId, laptopTimeMs: now() });
     this.phaseTimer = setTimeout(() => this._endPostCalibration(), this.config.calibrationMs);
@@ -293,6 +305,17 @@ export class TrialController {
       dotX: this.dotX,
       dotY: this.dotY,
       markerSquares: this.markerEncoder.squares(this.canvasWidth, this.canvasHeight),
+      // Local-only progress info for the on-screen HUD (never goes over the
+      // wire — trial_config/block_start/etc already carry what the phone needs).
+      stepIndex: this.stepIndex,
+      totalSteps: this.protocol ? this.protocol.stepDegrees.length : 0,
+      pursuitPassIndex: this.pursuitPassIndex,
+      totalPursuitPasses: this.protocol?.pursuit ? this.protocol.pursuit.passes : 0,
+      pursuitDirection: this.pursuit?.direction ?? null,
+      phaseStartMs: this.phaseStartMs,
+      phaseDurationMs: this.phaseDurationMs,
+      canvasWidth: this.canvasWidth,
+      canvasHeight: this.canvasHeight,
     });
   }
 }
