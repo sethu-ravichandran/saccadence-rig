@@ -1,12 +1,15 @@
-// StartScreen — clinic-rig demo gate, structured as a 3-step wizard: pair
-// device -> sign in -> session setup. Each step is one concern with its own
-// "Continue", instead of one form doing pairing/auth/config at once — the
-// pairing step's Continue is disabled until a phone actually joins, so the
-// precondition is structural rather than something the clinician has to
+// StartScreen — clinic-rig demo gate, structured as a 4-step wizard: pair
+// device -> sign in -> session setup -> calibrating phase. Each step is one
+// concern with its own "Continue" (or, for calibration, an external
+// confirmation), instead of one form doing pairing/auth/config/calibration
+// at once — pairing's Continue is disabled until a phone joins and
+// calibration only closes once the phone confirms marker lock, so both
+// preconditions are structural rather than something the clinician has to
 // remember to check. Not real auth — just enough to "look real" per the
 // demo-polish pass. Lives entirely in the DOM; nothing here touches
 // trial/marker/WS logic beyond announcing the session code it generated
-// (via onSessionCode) so main.js can register it with the relay.
+// (via onSessionCode) and starting calibration (via onCalibrate) so main.js
+// can wire those into the relay/TrialController.
 
 const DEMO_PIN = '1234';
 const PROTOCOL_LABELS = {
@@ -24,6 +27,11 @@ function randomSessionCode() {
 let pairStatusEl = null;
 let pairContinueBtn = null;
 let isPaired = false;
+let overlayEl = null;
+let calibStatusEl = null;
+
+const CALIB_WAITING_TEXT = "Point the phone's camera at the marker, bottom-right — waiting for it to confirm lock…";
+const CALIB_CONFIRMED_TEXT = 'Marker confirmed by phone ✓ — closing calibration screen…';
 
 /** Called from main.js on every peer_count WS message — count includes this rig tab itself. */
 export function setPaired(count) {
@@ -33,6 +41,17 @@ export function setPaired(count) {
     pairStatusEl.style.color = isPaired ? '#4ade80' : '#9a9aa4';
   }
   if (pairContinueBtn) pairContinueBtn.disabled = !isPaired;
+}
+
+/**
+ * Called from main.js on `phone_ready` — the phone only sends that once its
+ * camera has locked onto the guard marker. The calibration screen (step 4)
+ * stays up until this fires, then closes so the trial can begin; Space
+ * still has to be pressed to actually launch it, unchanged.
+ */
+export function setCalibrationConfirmed(confirmed) {
+  if (calibStatusEl) calibStatusEl.textContent = confirmed ? CALIB_CONFIRMED_TEXT : CALIB_WAITING_TEXT;
+  if (confirmed && overlayEl) overlayEl.style.display = 'none';
 }
 
 /**
@@ -70,17 +89,20 @@ function showStep(stepEl, allSteps) {
   });
 }
 
-export function attachStartScreen({ config, onEnter, onSessionCode }) {
+export function attachStartScreen({ config, onCalibrate, onSessionCode }) {
   const overlay = document.getElementById('start-screen');
+  overlayEl = overlay;
   const stepPair = document.getElementById('step-pair');
   const stepLogin = document.getElementById('step-login');
   const stepSetup = document.getElementById('step-setup');
-  const allSteps = [stepPair, stepLogin, stepSetup];
+  const stepCalibrate = document.getElementById('step-calibrate');
+  const allSteps = [stepPair, stepLogin, stepSetup, stepCalibrate];
 
   const sessionCodeEl = document.getElementById('session-code');
   const qrEl = document.getElementById('session-qr');
   pairStatusEl = document.getElementById('pair-status');
   pairContinueBtn = document.getElementById('pair-continue');
+  calibStatusEl = document.getElementById('calib-status-text');
 
   const loginForm = document.getElementById('login-form');
   const errorEl = document.getElementById('start-error');
@@ -148,7 +170,10 @@ export function attachStartScreen({ config, onEnter, onSessionCode }) {
     config.viewDistMm = settings.viewDistMm;
     config.screenWidthMm = settings.screenWidthMm;
     config.protocolId = settings.protocol;
-    overlay.style.display = 'none';
-    onEnter(settings);
+    // Overlay stays up — step 4 (calibrating phase) takes over next, and
+    // only closes once the phone actually confirms marker lock.
+    showStep(stepCalibrate, allSteps);
+    calibStatusEl.textContent = CALIB_WAITING_TEXT;
+    onCalibrate(settings);
   });
 }

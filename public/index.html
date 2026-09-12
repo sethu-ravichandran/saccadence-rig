@@ -77,6 +77,25 @@
   .protocol-card span { font-size: 11px; color: #9a9aa4; }
   .protocol-card[aria-checked="true"] { border-color: #3a7bfd; background: rgba(58, 123, 253, 0.14); }
 
+  /* Step 4 — calibrating phase: same panel chrome as steps 1-3, content is
+     a live preview of the marker the phone is actually decoding. */
+  #step-calibrate { text-align: center; }
+  #step-calibrate .sub { text-align: center; }
+  .marker-preview-frame {
+    margin-top: 20px; padding: 16px; display: flex; align-items: center; justify-content: center;
+    background: #0e0e11; border: 1px solid #333; border-radius: 8px;
+  }
+  #calib-marker-preview { display: block; }
+
+  /* Always-on-top real marker layer — sits above the login/pairing modal
+     (higher z-index) so the phone can still film it in its true, unchanged
+     position once calibration starts. Transparent everywhere except the
+     painted squares; clicks pass through it. Stays hidden through the
+     onboarding steps (1-3): nothing is being decoded yet, so a flickering
+     corner strip there is pure noise. Revealed on entering step 4. */
+  #marker-canvas { position: fixed; inset: 0; z-index: 15; pointer-events: none; }
+  #marker-canvas[hidden] { display: none; }
+
   /* Live-trial HUD — visibility of system status, kept small and corner-anchored
      so it informs the clinician without becoming jury-facing chrome. */
   #hud {
@@ -167,10 +186,11 @@
       <span class="dot active" data-step="1"></span>
       <span class="dot" data-step="2"></span>
       <span class="dot" data-step="3"></span>
+      <span class="dot" data-step="4"></span>
     </div>
 
     <section class="panel" id="step-pair" data-step="1">
-      <div class="step-label">Step 1 of 3 &middot; Pair device</div>
+      <div class="step-label">Step 1 of 4 &middot; Pair device</div>
       <h1>Pair the phone</h1>
       <p class="sub">Scan this on the phone app, or type the code in.</p>
       <div id="session-qr"></div>
@@ -180,7 +200,7 @@
     </section>
 
     <section class="panel" id="step-login" data-step="2" hidden>
-      <div class="step-label">Step 2 of 3 &middot; Clinician sign-in</div>
+      <div class="step-label">Step 2 of 4 &middot; Clinician sign-in</div>
       <h1>Sign in</h1>
       <form id="login-form">
         <label for="field-username">Username</label>
@@ -198,7 +218,7 @@
     </section>
 
     <section class="panel" id="step-setup" data-step="3" hidden>
-      <div class="step-label">Step 3 of 3 &middot; Session setup</div>
+      <div class="step-label">Step 3 of 4 &middot; Session setup</div>
       <h1>Session setup</h1>
       <form id="setup-form">
         <label for="field-width">Screen width (mm)</label>
@@ -217,8 +237,19 @@
           </button>
         </div>
 
-        <button type="submit" class="btn-primary">Begin session</button>
+        <button type="submit" class="btn-primary">Calibrate</button>
       </form>
+    </section>
+
+    <section class="panel" id="step-calibrate" data-step="4" hidden>
+      <div class="step-label">Step 4 of 4 &middot; Calibrating phase</div>
+      <h1>Calibrating phase</h1>
+      <p class="sub" id="calib-status-text" role="status" aria-live="polite">
+        Point the phone's camera at the marker, bottom-right &mdash; waiting for it to confirm lock&hellip;
+      </p>
+      <div class="marker-preview-frame">
+        <canvas id="calib-marker-preview" width="280" height="52" aria-hidden="true"></canvas>
+      </div>
     </section>
   </div>
 </div>
@@ -243,6 +274,10 @@
 </div>
 
 <canvas id="stage"></canvas>
+<!-- Real marker layer, painted above every modal (see CSS) so the phone can
+     film it in its true position during the calibration screen. Hidden until
+     step 4 — see main.js's onCalibrate. -->
+<canvas id="marker-canvas" hidden></canvas>
 <!-- Classic (non-module) script: puts qrcode() on window ahead of main.js. -->
 <script src="vendor/qrcode.js"></script>
 <script type="module" src="js/main.js"></script>

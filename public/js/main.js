@@ -7,15 +7,25 @@ import { Renderer } from './renderer.js';
 import { TrialController } from './trialController.js';
 import { WsClient } from './wsClient.js';
 import { attachControlSurface } from './controlSurface.js';
-import { attachStartScreen, setPaired } from './startScreen.js';
+import { attachStartScreen, setPaired, setCalibrationConfirmed } from './startScreen.js';
 import { attachHud } from './hud.js';
+import { attachMarkerPreview } from './markerPreview.js';
 import { RigState } from './rigState.js';
 import { estimatedDurationMs } from './protocolTiming.js';
 
 const canvas = document.getElementById('stage');
-const renderer = new Renderer(canvas);
+const markerCanvas = document.getElementById('marker-canvas');
+const renderer = new Renderer(canvas, markerCanvas);
 const markerEncoder = new MarkerEncoder(config.marker);
 const hud = attachHud();
+
+// Decorative live copy of the marker inside the calibrating-phase modal —
+// same encoder, same flicker, just redrawn at a legible scale. The real
+// marker (markerCanvas, above) is what the phone actually decodes.
+const calibPreviewCanvas = document.getElementById('calib-marker-preview');
+const markerPreview = calibPreviewCanvas
+  ? attachMarkerPreview(calibPreviewCanvas, markerEncoder, config.marker.bitCount)
+  : null;
 
 // Set by attachStartScreen's onSessionCode as soon as the page generates its
 // pairing code (before the operator has even submitted the login form) and
@@ -49,6 +59,7 @@ const ws = new WsClient({
       console.log('[phone] marker locked, ready ✓ — Space will now end calibration.');
       markerConfirmedByPhone = true;
       hud.setMarkerConfirmed(true);
+      setCalibrationConfirmed(true);
     }
   },
 });
@@ -142,11 +153,15 @@ attachStartScreen({
     sessionCode = code;
     ws.send({ type: 'register_rig', sessionCode });
   },
-  onEnter: (settings) => {
+  onCalibrate: (settings) => {
     console.log('[session]', settings);
     hud.setSessionInfo({ sessionCode: settings.sessionCode, protocolLabel: settings.protocolLabel });
     markerConfirmedByPhone = false;
     hud.setMarkerConfirmed(false);
+    // Calibration is the first moment anything decodes the marker, so this
+    // is where the real corner strip appears — it stays hidden through the
+    // onboarding steps, where it would just be unexplained flicker.
+    markerCanvas.hidden = false;
     trial.beginSetupCalibration();
   },
 });
@@ -156,6 +171,7 @@ attachStartScreen({
 function loop() {
   trial.tick();
   updateTiming();
+  markerPreview?.draw();
   requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
