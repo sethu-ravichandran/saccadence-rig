@@ -158,6 +158,23 @@ test('a no-pursuit trial runs PRE_CALIBRATION -> FIXATION -> SACCADE -> POST_CAL
   const { trial, markerEncoder, events } = makeController();
   trial.start('subject-1');
 
+  // The closing calibration is now clinician-gated: the controller parks in
+  // AWAITING_POST_CALIBRATION and the marker stays idle until the prompt is
+  // confirmed, so the phone is never still filming a face when the window opens.
+  await waitUntil(trial, () => trial.state === RigState.AWAITING_POST_CALIBRATION, { timeoutMs: 3000 });
+  assert.equal(markerEncoder.active, false, 'marker must stay idle while awaiting confirmation');
+  assert.equal(
+    events.some((e) => e.type === 'awaiting_post_calibration'),
+    true,
+    'phone must be told the trial is waiting on the closing calibration',
+  );
+  assert.equal(
+    events.some((e) => e.type === 'calibration_start' && e.role === 'post'),
+    false,
+    'closing calibration must not open before it is confirmed',
+  );
+  trial.beginPostCalibration();
+
   await waitUntil(trial, () => trial.state === RigState.COMPLETED, { timeoutMs: 3000 });
 
   assert.equal(markerEncoder.active, false, 'guard must be idle again after closing calibration');
@@ -195,6 +212,8 @@ test('a pursuit-enabled trial runs SACCADE -> PURSUIT (sweep_start/sweep_end per
 
   await waitUntil(trial, () => trial.state === RigState.PURSUIT, { timeoutMs: 3000 });
   await pumpTicks(trial, 200, 2); // let both passes complete
+  await waitUntil(trial, () => trial.state === RigState.AWAITING_POST_CALIBRATION, { timeoutMs: 3000 });
+  trial.beginPostCalibration();
   await waitUntil(trial, () => trial.state === RigState.COMPLETED, { timeoutMs: 3000 });
 
   const sweepStarts = events.filter((e) => e.type === 'sweep_start');

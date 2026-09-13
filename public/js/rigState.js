@@ -14,6 +14,10 @@ export const RigState = Object.freeze({
   FIXATION: 'fixation',
   SACCADE: 'saccade',
   PURSUIT: 'pursuit',
+  // Blocks finished; the closing calibration waits for the clinician to
+  // confirm, so the marker does not open its 5 s window while the phone is
+  // still pointed at the patient's face.
+  AWAITING_POST_CALIBRATION: 'awaiting_post_calibration',
   POST_CALIBRATION: 'post_calibration',
   COMPLETED: 'completed',
 

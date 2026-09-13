@@ -178,6 +178,29 @@
     cursor: pointer; padding: 0 2px;
   }
 </style>
+<style id="post-calib-style">
+#post-calib-prompt {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.72);
+  z-index: 9999;
+}
+#post-calib-prompt[hidden] { display: none; }
+#post-calib-card {
+  background: #14161c;
+  color: #f4f5f7;
+  padding: 2rem 2.25rem;
+  border-radius: 14px;
+  max-width: 32rem;
+  text-align: center;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5);
+}
+#post-calib-card h2 { margin: 0 0 0.75rem; font-size: 1.5rem; }
+#post-calib-card p { margin: 0 0 1.5rem; opacity: 0.8; line-height: 1.5; }
+#post-calib-card button { min-width: 9rem; }
+</style>
 </head>
 <body>
 <div id="start-screen">
@@ -254,6 +277,17 @@
   </div>
 </div>
 <!-- Live-trial status, hidden until a session actually starts (see hud.js). -->
+<!-- Closing-calibration gate. The clinician confirms before the marker
+     opens its 5 s window, so the phone is never still filming the patient's
+     face when the window starts. -->
+<div id="post-calib-prompt" hidden>
+  <div id="post-calib-card" role="alertdialog" aria-modal="true" aria-labelledby="post-calib-title">
+    <h2 id="post-calib-title">Proceed to post calibration?</h2>
+    <p>Point the phone's camera back at this screen's marker before continuing.</p>
+    <button type="button" class="btn-primary" id="post-calib-ok">OK</button>
+  </div>
+</div>
+
 <div id="hud" hidden>
   <div id="hud-title">Ready</div>
   <div id="hud-subtitle"></div>

@@ -174,7 +174,7 @@ export class TrialController {
     if (this.stepIndex >= this.protocol.stepDegrees.length) {
       this.onEvent({ type: 'block_end', block: 'saccade', trialId: this.trialId, laptopTimeMs: now() });
       if (this.protocol.pursuit) this._enterPursuit();
-      else this._enterPostCalibration();
+      else this._awaitPostCalibration();
       return;
     }
     const deg = this.protocol.stepDegrees[this.stepIndex];
@@ -214,7 +214,7 @@ export class TrialController {
     if (this.pursuitPassIndex >= passes) {
       this.pursuit = null;
       this.onEvent({ type: 'block_end', block: 'pursuit', trialId: this.trialId, laptopTimeMs: now() });
-      this._enterPostCalibration();
+      this._awaitPostCalibration();
       return;
     }
     // Alternate sweep direction each pass; each pass runs edge-to-edge at
@@ -267,6 +267,27 @@ export class TrialController {
   }
 
   // ---- closing calibration ------------------------------------------------------
+
+  /**
+   * Blocks are done, but the marker stays idle until the clinician confirms.
+   * Auto-opening the window here was the reason the closing calibration never
+   * locked: the operator is still holding the phone at the patient's face for
+   * the whole 5 s, so the phone films a face instead of the marker and every
+   * trial fell back to a constant offset with no measured drift.
+   */
+  _awaitPostCalibration() {
+    this._clearTimer();
+    this.state = RigState.AWAITING_POST_CALIBRATION;
+    this.markerEncoder.setActive(false);
+    this._jumpTo(this.canvasWidth / 2, this.canvasHeight / 2);
+    this.onEvent({ type: 'awaiting_post_calibration', trialId: this.trialId, laptopTimeMs: now() });
+  }
+
+  /** Clinician confirmed the prompt — open the closing calibration window. No-op otherwise. */
+  beginPostCalibration() {
+    if (this.state !== RigState.AWAITING_POST_CALIBRATION) return;
+    this._enterPostCalibration();
+  }
 
   _enterPostCalibration() {
     this.state = RigState.POST_CALIBRATION;

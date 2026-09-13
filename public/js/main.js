@@ -79,12 +79,35 @@ const trial = new TrialController({
   },
   onEvent: (evt) => {
     console.log('[event]', evt.type, evt);
+    if (evt.type === 'awaiting_post_calibration') showPostCalibrationPrompt();
     if (evt.type === 'trial_config') {
       trialStartMs = performance.now();
       trialPlannedMs = estimatedDurationMs(config.protocols[evt.protocolId], config.calibrationMs);
     }
     ws.send(evt);
   },
+});
+
+
+// Closing-calibration gate: the marker stays idle until the clinician
+// confirms here, so the 5 s window can't open while the phone is still
+// pointed at the patient. See TrialController._awaitPostCalibration.
+const postCalibPrompt = document.getElementById('post-calib-prompt');
+const postCalibOk = document.getElementById('post-calib-ok');
+
+function showPostCalibrationPrompt() {
+  if (!postCalibPrompt) return;
+  postCalibPrompt.hidden = false;
+  postCalibOk?.focus();
+}
+
+function hidePostCalibrationPrompt() {
+  if (postCalibPrompt) postCalibPrompt.hidden = true;
+}
+
+postCalibOk?.addEventListener('click', () => {
+  hidePostCalibrationPrompt();
+  trial.beginPostCalibration();
 });
 
 // Feeds hud.js's time-remaining/estimate line — hud.js owns the DOM, this
@@ -128,6 +151,7 @@ attachControlSurface({
   },
   onRepeat: () => ws.send(trial.start('repeat')),
   onStop: () => {
+    hidePostCalibrationPrompt();
     if (trial.state === RigState.SETUP_CALIBRATION) trial.endSetupCalibration();
     trial.stop();
     ws.send({ type: 'stop' });
